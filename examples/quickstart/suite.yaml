@@ -1,0 +1,48 @@
+# Quickstart eval suite for llm-eval-harness.
+#
+# Run it against the bundled mock backend (no API key needed):
+#
+#   llm-eval run examples/quickstart/suite.yaml \
+#       --backend mock --mock-file examples/quickstart/mock_map.json \
+#       --out examples/quickstart/report
+#
+# The mock backend answers from mock_map.json; the first two cases pass
+# and the third intentionally fails so you can see what a failure looks
+# like in the report.
+name: "quickstart"
+description: "Demo suite exercising exact_match, contains, regex, and max_length scorers"
+version: "1"
+cases:
+  - id: "capital-of-france"
+    prompt: "What is the capital of France? Answer with the city name only."
+    expected: "Paris"
+    rubric:
+      - type: "exact_match"
+        weight: 1.0
+
+  - id: "summarize-in-one-line"
+    prompt: "Summarize in one sentence: the harness scores model outputs against rubrics."
+    rubric:
+      - type: "contains"
+        expected: ["rubric", "score"]
+        match: "all"
+        weight: 1.0
+      - type: "max_length"
+        max_words: 40
+        weight: 0.5
+
+  - id: "arithmetic"
+    prompt: "What is 7 * 8? Reply with just the number."
+    rubric:
+      - type: "regex"
+        pattern: "^\\s*56\\s*$"
+        weight: 1.0
+
+  - id: "intentional-failure"
+    prompt: "Name a planet that starts with the letter Z."
+    rubric:
+      - type: "contains"
+        expected: "Zephyria"
+        weight: 1.0
+    metadata:
+      note: "This case is designed to fail so the report shows a failure."

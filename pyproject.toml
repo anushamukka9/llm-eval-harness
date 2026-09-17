@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-eval-harness"
+version = "0.1.0"
+description = "Lightweight LLM evaluation harness: YAML eval suites, pluggable model backends, rubric scoring, CLI runner with aggregated reports"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Anusha Mukka" }]
+keywords = ["llm", "evaluation", "evals", "testing"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = ["pyyaml>=6"]
+
+[project.urls]
+Homepage = "https://anushamukka.com"
+Repository = "https://github.com/anushamukka9/llm-eval-harness"
+
+[project.scripts]
+llm-eval = "llm_eval_harness.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
