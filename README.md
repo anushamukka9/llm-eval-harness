@@ -87,3 +87,20 @@ Anusha Mukka — [anushamukka.com](https://anushamukka.com)
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Real-model evals
+
+The `evals/` directory holds a ready-to-run comparison suite: 16 cases
+(10 prompt-injection robustness drawn from the llm-sentinel corpus, 6
+general capability smoke checks), a one-command runner, and a results
+template.
+
+```bash
+export OPENAI_API_KEY=...
+chmod +x evals/run_real_models.sh   # one time
+./evals/run_real_models.sh
+```
+
+Any OpenAI-compatible endpoint works via `--base-url`. See
+[evals/README.md](evals/README.md) for the method and its honest
+limitations.
