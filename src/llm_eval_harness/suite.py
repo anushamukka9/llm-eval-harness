@@ -128,14 +128,17 @@ class EvalSuite:
 
 
 def load_suite(path: str | Path) -> EvalSuite:
-    """Load an :class:`EvalSuite` from a YAML or JSON file.
+    """Load an :class:`EvalSuite` from a YAML, JSON, or JSONL file.
 
-    The format is chosen from the file extension (``.json`` -> JSON,
-    anything else -> YAML).
+    The format is chosen from the file extension: ``.json`` -> JSON,
+    ``.jsonl`` -> one case per line (see :func:`suite_from_jsonl`),
+    anything else -> YAML.
     """
     path = Path(path)
     if not path.is_file():
         raise SuiteError(f"suite file not found: {path}")
+    if path.suffix.lower() == ".jsonl":
+        return suite_from_jsonl(path)
     text = path.read_text(encoding="utf-8")
     try:
         if path.suffix.lower() == ".json":
@@ -145,3 +148,68 @@ def load_suite(path: str | Path) -> EvalSuite:
     except (yaml.YAMLError, json.JSONDecodeError) as exc:
         raise SuiteError(f"could not parse {path}: {exc}") from exc
     return EvalSuite.from_dict(data)
+
+
+def load_cases_jsonl(path: str | Path) -> list[EvalCase]:
+    """Load eval cases from a JSONL file: one JSON object per line.
+
+    Each line needs ``id`` and ``prompt``; ``expected``,
+    ``system_prompt``, ``rubric`` (a list of rule mappings), and
+    ``metadata`` are optional. Blank lines are skipped. A malformed line
+    raises :class:`SuiteError` naming the line number.
+    """
+    path = Path(path)
+    if not path.is_file():
+        raise SuiteError(f"suite file not found: {path}")
+    cases: list[EvalCase] = []
+    with path.open(encoding="utf-8") as f:
+        for lineno, line in enumerate(f, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise SuiteError(f"{path}:{lineno}: invalid JSON: {exc}") from exc
+            try:
+                cases.append(EvalCase.from_dict(data))
+            except SuiteError as exc:
+                raise SuiteError(f"{path}:{lineno}: {exc}") from exc
+    if not cases:
+        raise SuiteError(f"{path}: no cases found")
+    ids = [c.id for c in cases]
+    dupes = {i for i in ids if ids.count(i) > 1}
+    if dupes:
+        raise SuiteError(f"{path}: duplicate case id(s): {sorted(dupes)}")
+    return cases
+
+
+def suite_from_jsonl(
+    path: str | Path,
+    name: str | None = None,
+    default_rubric: list[Mapping[str, Any]] | None = None,
+    description: str = "",
+) -> EvalSuite:
+    """Build an :class:`EvalSuite` from a JSONL case file.
+
+    Lines that already carry a ``rubric`` keep it; lines without one get
+    ``default_rubric`` (a list of rule mappings, e.g.
+    ``[{"type": "exact_match"}]``), or an empty rubric when no default is
+    given (an empty rubric scores a neutral 1.0).
+    """
+    path = Path(path)
+    cases = load_cases_jsonl(path)
+    rules = (
+        [ScoringRule.from_dict(r) for r in default_rubric]
+        if default_rubric is not None
+        else []
+    )
+    for case in cases:
+        if not case.rubric:
+            case.rubric = list(rules)
+    return EvalSuite(
+        name=name or path.stem,
+        cases=cases,
+        description=description or f"Cases loaded from {path.name}",
+        version="1",
+    )
