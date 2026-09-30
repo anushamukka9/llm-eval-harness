@@ -1,9 +1,10 @@
 # llm-eval-harness
 
 A lightweight harness for evaluating LLM outputs. Define eval suites as
-YAML or JSON, run them against a pluggable model backend, score each case
-with rubric rules (exact match, regex, contains, length budget, or an
-LLM judge), and get aggregated reports — from the CLI or the Python API.
+YAML, JSON, or JSONL, run them against a pluggable model backend, score
+each case with rubric rules (exact match, regex, contains, length budget,
+or an LLM judge), and get aggregated reports — from the CLI or the Python
+API.
 
 ## Install
 
@@ -26,6 +27,13 @@ llm-eval run examples/quickstart/suite.yaml \
 Expected output: `passed=3/4` — one case is designed to fail so you can see
 what failures look like in `report/report.md` and `report/report.json`.
 
+No API key needed for judge scoring either — the heuristic judge scores
+locally:
+
+```bash
+python examples/heuristic_judge_demo.py
+```
+
 Scaffold your own suite:
 
 ```bash
@@ -45,10 +53,11 @@ llm-eval run suite.yaml --backend openai --model gpt-4o-mini --out report
 
 ```python
 from llm_eval_harness import load_suite, run_suite, to_markdown
-from llm_eval_harness import MockBackend
+from llm_eval_harness import MockBackend, HeuristicJudgeBackend
 
-suite = load_suite("suite.yaml")
-result = run_suite(suite, MockBackend.from_file("mock_map.json"))
+suite = load_suite("suite.yaml")          # YAML, JSON, or JSONL
+backend = MockBackend.from_file("mock_map.json")
+result = run_suite(suite, backend, judge_backend=HeuristicJudgeBackend())
 print(result.summary())   # suite=... backend=mock passed=3/4 pass_rate=75.0% ...
 print(to_markdown(result))
 ```
@@ -57,8 +66,9 @@ print(to_markdown(result))
 
 ```
 src/llm_eval_harness/
-├── suite.py      # EvalSuite / EvalCase / ScoringRule: YAML/JSON loading + validation
-├── backends.py   # ModelBackend interface: Stub, Mock (regex-routed), OpenAI-compatible
+├── suite.py      # EvalSuite / EvalCase / ScoringRule: YAML/JSON/JSONL loading + validation
+├── backends.py   # ModelBackend interface: Stub, Mock (regex-routed),
+│                 #   HeuristicJudge (local judge heuristic), OpenAI-compatible
 ├── scorers.py    # exact_match, regex, contains, max_length, judge; weighted aggregation
 ├── runner.py     # run_suite / run_case: generation, scoring, stats (SuiteResult)
 ├── reporter.py   # report.json + report.md rendering
