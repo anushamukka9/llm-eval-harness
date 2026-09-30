@@ -6,7 +6,16 @@ running it, and reading the reports. Also see the
 
 ## 1. Write a suite
 
-A suite is a YAML (or JSON) file with a `name` and a `cases` list.
+A suite is a YAML (or JSON) file with a `name` and a `cases` list — or a
+JSONL file with one case object per line:
+
+```jsonl
+{"id": "refund-policy", "prompt": "Can I get a refund after 45 days?",
+ "rubric": [{"type": "judge", "criteria": "states the 30-day refund window"}]}
+{"id": "capital-fr", "prompt": "What is the capital of France?",
+ "expected": "Paris", "rubric": [{"type": "exact_match"}]}
+```
+
 Each case has an `id`, a `prompt`, and a `rubric` — a list of scoring
 rules. A rule needs a `type` and may carry a `weight` plus type-specific
 params. The case score is the weight-weighted mean of its rules, and a
@@ -30,6 +39,20 @@ cases:
         weight: 0.5
 ```
 
+Load suites in Python with `load_suite` (dispatches on extension:
+`.jsonl` -> JSONL, `.json` -> JSON, anything else -> YAML), or build one
+from JSONL with extra control:
+
+```python
+from llm_eval_harness import suite_from_jsonl
+
+suite = suite_from_jsonl("cases.jsonl", name="regression",
+                         default_rubric=[{"type": "exact_match"}])
+```
+
+Lines that already carry a `rubric` keep it; lines without one get the
+default (or an empty rubric, which scores a neutral 1.0).
+
 ## 2. Scorer reference
 
 | Type | What it checks | Key params |
@@ -38,7 +61,7 @@ cases:
 | `regex` | `pattern` matches somewhere in the output | `pattern` |
 | `contains` | phrase(s) appear in the output | `expected` (string or list), `match: any\|all` |
 | `max_length` | output stays within budget | `max_words`, `max_chars` |
-| `judge` | a judge model rates the output against `criteria` | `criteria` (requires a judge backend) |
+| `judge` | a judge model rates the output against `criteria` | `criteria` (requires `--judge-backend`: `stub`, `heuristic`, or `openai`) |
 
 Any rule also accepts `pass_threshold` (default `0.5`) to decide its own
 pass/fail, and `weight` (default `1.0`) for the aggregation. If a rule
@@ -72,7 +95,24 @@ llm-eval run suite.yaml --backend openai --model llama3 \
 # judge-model scoring with a stub judge (deterministic)
 llm-eval run suite.yaml --backend mock --mock-file mock_map.json \
     --judge-backend stub --out report
+
+# judge scoring with the local heuristic judge (no API key)
+llm-eval run suite.yaml --backend mock --mock-file mock_map.json \
+    --judge-backend heuristic --out report
 ```
+
+### Judge backends
+
+The `judge` scorer needs a second backend to rate outputs:
+
+- `stub` — canned `SCORE: <0-100>` replies; deterministic, good for testing
+  the scorer plumbing.
+- `heuristic` — `HeuristicJudgeBackend`: scores locally from keyword
+  coverage of the criteria plus length sanity. No API key, no network —
+  ideal for CI and demos. It is a smoke-test tool, not a real evaluator:
+  it rewards keyword overlap, which a fluent-but-wrong answer can game.
+  Use a real judge model for judgments that matter.
+- `openai` — a real model judging via the OpenAI-compatible endpoint.
 
 ## 4. Reports
 
