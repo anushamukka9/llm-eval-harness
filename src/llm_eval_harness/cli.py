@@ -15,6 +15,7 @@ from pathlib import Path
 
 from llm_eval_harness import __version__, load_suite
 from llm_eval_harness.backends import (
+    HeuristicJudgeBackend,
     MockBackend,
     ModelBackend,
     OpenAICompatibleBackend,
@@ -67,6 +68,8 @@ def build_judge_backend(args: argparse.Namespace) -> ModelBackend | None:
         return None
     if args.judge_backend == "stub":
         return StubBackend(mode="canned", response=args.judge_stub_response)
+    if args.judge_backend == "heuristic":
+        return HeuristicJudgeBackend()
     if args.judge_backend == "openai":
         api_key = args.api_key or os.environ.get("OPENAI_API_KEY")
         return OpenAICompatibleBackend(
@@ -126,8 +129,9 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--api-key", help="API key (or set OPENAI_API_KEY)")
     run_p.add_argument("--max-tokens", type=int, default=512)
     run_p.add_argument("--temperature", type=float, default=0.0)
-    run_p.add_argument("--judge-backend", choices=["stub", "openai"],
-                       help="backend used for 'judge' rubric rules")
+    run_p.add_argument("--judge-backend", choices=["stub", "heuristic", "openai"],
+                       help="backend used for 'judge' rubric rules "
+                            "('heuristic' scores locally, no API key)")
     run_p.add_argument("--judge-model", help="model name for the judge backend")
     run_p.add_argument("--judge-stub-response", default="SCORE: 100\nLooks good.",
                        help="canned judge reply when --judge-backend stub")
