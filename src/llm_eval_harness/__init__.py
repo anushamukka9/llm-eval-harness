@@ -14,6 +14,7 @@ Typical usage::
 """
 
 from llm_eval_harness.backends import (
+    HeuristicJudgeBackend,
     ModelBackend,
     ModelResponse,
     MockBackend,
@@ -23,7 +24,14 @@ from llm_eval_harness.backends import (
 from llm_eval_harness.reporter import CaseResult, SuiteResult, to_json, to_markdown
 from llm_eval_harness.runner import run_suite
 from llm_eval_harness.scorers import ScoreDetail, score_case
-from llm_eval_harness.suite import EvalCase, EvalSuite, ScoringRule, load_suite
+from llm_eval_harness.suite import (
+    EvalCase,
+    EvalSuite,
+    ScoringRule,
+    load_cases_jsonl,
+    load_suite,
+    suite_from_jsonl,
+)
 
 __version__ = "0.1.0"
 
@@ -36,6 +44,7 @@ __all__ = [
     "ModelResponse",
     "StubBackend",
     "MockBackend",
+    "HeuristicJudgeBackend",
     "OpenAICompatibleBackend",
     "ScoreDetail",
     "score_case",
@@ -44,5 +53,7 @@ __all__ = [
     "run_suite",
     "to_json",
     "to_markdown",
+    "load_cases_jsonl",
     "load_suite",
+    "suite_from_jsonl",
 ]
