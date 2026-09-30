@@ -103,6 +103,99 @@ class BackendError(RuntimeError):
     """Raised when a remote backend call fails."""
 
 
+_STOPWORDS = frozenset(
+    """
+    a an the and or but if then else when while for of to in on at by with
+    from as is are was were be been being it its this that these those
+    i you he she we they them him her us our their my your his not no
+    do does did done will would can could shall should may might must
+    have has had having so such than too very just about into over
+    under again once here there where which who whom what whose how
+    all any both each few more most other some only own same also
+    """.split()
+)
+
+_JUDGE_PROMPT_RE = re.compile(
+    r"Criteria:\s*(?P<criteria>.*?)\n\nAssistant's answer:\s*\n---\n(?P<output>.*?)\n---",
+    re.DOTALL,
+)
+
+
+def _content_terms(text: str) -> list[str]:
+    """Content-bearing words of *text*: lowercase, alphabetic, len >= 3,
+    minus stopwords, de-duplicated preserving order."""
+    terms = []
+    for token in re.findall(r"[a-zA-Z]+", text.lower()):
+        if len(token) >= 3 and token not in _STOPWORDS and token not in terms:
+            terms.append(token)
+    return terms
+
+
+class HeuristicJudgeBackend(ModelBackend):
+    """A local-heuristic stand-in for an LLM judge (no API key needed).
+
+    Parses the harness judge prompt (``Criteria: ...`` + the assistant's
+    answer) and scores the output from two cheap signals:
+
+    * **keyword coverage** (weight 0.7): fraction of the criteria's
+      content-bearing terms that appear in the output;
+    * **length sanity** (weight 0.3): outputs of 20+ words score full
+      marks, shorter ones scale linearly (a two-word answer rarely
+      satisfies a rubric).
+
+    The reply follows the same ``SCORE: <0-100>`` convention as a real
+    judge, so this backend drops straight into the ``judge`` scorer and
+    the ``--judge-backend`` CLI flag.
+
+    This is a smoke-test tool, not a real evaluator: it rewards keyword
+    overlap, which a fluent-but-wrong answer can game. Use it to exercise
+    the harness plumbing (CI, demos, scorer development); use a real judge
+    model for judgments that matter.
+    """
+
+    def __init__(self) -> None:
+        self.name = "heuristic-judge"
+
+    def generate(self, prompt: str, system: str | None = None, **kwargs: Any) -> ModelResponse:
+        start = time.perf_counter()
+        m = _JUDGE_PROMPT_RE.search(prompt)
+        if not m:
+            return ModelResponse(
+                text="SCORE: 0\nCould not parse judge prompt; "
+                     "expected the harness 'Criteria:' / 'Assistant's answer:' shape.",
+                latency_s=time.perf_counter() - start,
+                meta={"heuristic": True, "parsed": False},
+            )
+        criteria, output = m.group("criteria"), m.group("output")
+        terms = _content_terms(criteria)
+        out_words = _content_terms(output)
+        out_set = set(out_words)
+        hits = [t for t in terms if t in out_set]
+        coverage = (len(hits) / len(terms)) if terms else 0.5
+        length_score = min(1.0, len(output.split()) / 20.0)
+        score = round(100.0 * (0.7 * coverage + 0.3 * length_score))
+        if terms:
+            missed = [t for t in terms if t not in out_set]
+            justification = (
+                f"Matched {len(hits)}/{len(terms)} key terms"
+                + (f" ({', '.join(hits[:5])})" if hits else "")
+                + (f"; missed: {', '.join(missed[:5])}" if missed else "")
+                + "."
+            )
+        else:
+            justification = "No content-bearing terms in the criteria; scored on length only."
+        return ModelResponse(
+            text=f"SCORE: {score}\n{justification}",
+            latency_s=time.perf_counter() - start,
+            meta={
+                "heuristic": True,
+                "parsed": True,
+                "terms_matched": len(hits),
+                "terms_total": len(terms),
+            },
+        )
+
+
 class OpenAICompatibleBackend(ModelBackend):
     """Talk to any OpenAI-compatible ``/chat/completions`` endpoint.
 
